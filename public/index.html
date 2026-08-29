@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The In-Between</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <span class="brand">The In-Between</span>
+        <a class="login-link" href="/auth/login">Sign in with Commons</a>
+      </header>
+
+      <section id="response" class="response" aria-live="polite"></section>
+
+      <form id="composer" class="composer">
+        <button
+          type="button"
+          id="mode-button"
+          class="mode-button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          title="How do you want to wait?"
+        >
+          ⚡
+        </button>
+        <div id="mode-popover" class="mode-popover" hidden>
+          <button type="button" data-mode="minimal">⚡ Minimal</button>
+          <button type="button" data-mode="teach_me">🧠 Teach Me Something</button>
+          <button type="button" data-mode="game">🎮 Game</button>
+          <button type="button" data-mode="breadcrumbs">🕵️ Breadcrumbs</button>
+          <button type="button" data-mode="sonification">🔊 Sonification</button>
+        </div>
+        <input
+          id="prompt"
+          type="text"
+          placeholder="Ask anything..."
+          autocomplete="off"
+        />
+        <button type="submit" class="send-button">Send</button>
+      </form>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

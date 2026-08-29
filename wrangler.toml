@@ -1,0 +1,14 @@
+name = "commonsmade-ai-in-between"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# TODO: confirm with Commonsmade docs whether these need real values
+# (account_id is required by wrangler for deploy; ANTHROPIC key may be
+# unnecessary if the x402 Anthropic proxy is funded by the platform balance
+# during the hackathon).
+[vars]
+X402_BASE_URL = ""
