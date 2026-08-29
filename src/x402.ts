@@ -1,11 +1,10 @@
-import { x402Fetch } from "@commons/x402-helper";
+import { x402Fetch } from "./lib/commons-x402";
+import type { ProductEnv } from "./runtime";
 
-// Thin wrapper around the Commonsmade x402 proxy, using the platform's own
-// helper package (@commons/x402-helper) rather than a raw fetch — the
-// helper handles signing the payment token before forwarding to the real
-// provider. `requestUrl` is unused now (the helper resolves same-origin
-// paths itself) but kept in the signature so call sites don't need to
-// change if that ever stops being true.
+// Thin wrapper around the Commonsmade x402 proxy via the generated helper.
+// Assumption (unverified until install_x402_helper's real output is seen):
+// the base URL is `${env.COMMONS_X402_API_URL}/<provider>/<path>`. Confirm
+// this against the real generated src/lib/commons-x402.ts once available.
 export interface X402Result<T = unknown> {
   ok: boolean;
   status: number;
@@ -19,12 +18,13 @@ export interface X402Result<T = unknown> {
 }
 
 export async function callX402<T = unknown>(
-  _requestUrl: string,
+  env: ProductEnv,
   provider: string,
   path: string,
   init: RequestInit
 ): Promise<X402Result<T>> {
-  const res = await x402Fetch(`/x402/${provider}/${path}`, init);
+  const base = env.COMMONS_X402_API_URL ?? "";
+  const res = await x402Fetch(`${base}/${provider}/${path}`, init);
 
   if (res.status === 402) {
     const body = (await res.json()) as X402Result<T>["paymentRequired"];

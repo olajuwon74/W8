@@ -1,4 +1,5 @@
 import { callX402 } from "./x402";
+import type { ProductEnv } from "./runtime";
 
 interface SerpApiResponse {
   organic_results?: { title: string; snippet: string; link: string }[];
@@ -13,12 +14,9 @@ export interface SearchResult {
 // Real, paid, per-call external data — the one legitimate use of x402 in
 // the base flow. Only invoked when estimate.ts decides the prompt actually
 // needs current information; most prompts never call this at all.
-export async function search(
-  requestUrl: string,
-  query: string
-): Promise<SearchResult[]> {
+export async function search(env: ProductEnv, query: string): Promise<SearchResult[]> {
   const result = await callX402<SerpApiResponse>(
-    requestUrl,
+    env,
     "serpapi",
     `v1/search?q=${encodeURIComponent(query)}`,
     { method: "GET" }

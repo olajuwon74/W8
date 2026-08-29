@@ -1,4 +1,5 @@
 import { callX402 } from "./x402";
+import type { ProductEnv } from "./runtime";
 
 interface ClaudeMessage {
   role: "user" | "assistant";
@@ -10,29 +11,23 @@ interface ClaudeResponse {
 }
 
 // Routes the agent's own reasoning calls through the platform's x402
-// Anthropic proxy (per the provider table: /x402/anthropic/v1/messages).
-// This is plumbing, not a product feature — see MEMORY note in README
-// about why x402 stays out of the pitch's core framing.
+// Anthropic proxy. This is plumbing, not a product feature — the pitch
+// frames x402 as an optional add-on, not the core mechanism.
 export async function askClaude(
-  requestUrl: string,
+  env: ProductEnv,
   messages: ClaudeMessage[],
   opts: { maxTokens?: number; system?: string } = {}
 ): Promise<string> {
-  const result = await callX402<ClaudeResponse>(
-    requestUrl,
-    "anthropic",
-    "v1/messages",
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: opts.maxTokens ?? 1024,
-        system: opts.system,
-        messages,
-      }),
-    }
-  );
+  const result = await callX402<ClaudeResponse>(env, "anthropic", "v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: opts.maxTokens ?? 1024,
+      system: opts.system,
+      messages,
+    }),
+  });
 
   if (!result.ok || !result.data) {
     throw new Error(

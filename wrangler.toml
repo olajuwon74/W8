@@ -1,14 +1,10 @@
+# NOTE: this file mirrors what was here for the earlier plain-Worker
+# attempt and is likely superseded by whatever wrangler.toml Commonsmade's
+# `deploy_space` tool manages internally for the Durable Object app
+# (durable_objects binding + migrations for the `App` class, etc.). We
+# don't have visibility into that generated config. Kept here only as a
+# local reference for `tsc`/type-checking, not as the source of truth for
+# the actual deploy.
 name = "commonsmade-ai-in-between"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
-
-[assets]
-directory = "public"
-binding = "ASSETS"
-
-# TODO: confirm with Commonsmade docs whether these need real values
-# (account_id is required by wrangler for deploy; ANTHROPIC key may be
-# unnecessary if the x402 Anthropic proxy is funded by the platform balance
-# during the hackathon).
-[vars]
-X402_BASE_URL = ""

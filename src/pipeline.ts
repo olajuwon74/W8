@@ -2,6 +2,7 @@ import { estimate } from "./estimate";
 import { search } from "./search";
 import { askClaude } from "./claude";
 import { teachMeSomething, generateQuiz } from "./sidecontent";
+import type { ProductEnv } from "./runtime";
 
 export type Mode = "minimal" | "teach_me" | "game" | "breadcrumbs" | "sonification";
 
@@ -13,7 +14,7 @@ function sseFormat(event: string, data: unknown): string {
 // Every event here corresponds to something that actually occurred —
 // nothing is generated to "sound like progress."
 export async function runPipeline(
-  requestUrl: string,
+  env: ProductEnv,
   prompt: string,
   mode: Mode,
   writer: WritableStreamDefaultWriter<Uint8Array>
@@ -30,14 +31,14 @@ export async function runPipeline(
   // about this specific run.
   if (mode === "teach_me") {
     try {
-      const content = await teachMeSomething(requestUrl, prompt);
+      const content = await teachMeSomething(env, prompt);
       await emit("side_content", { kind: "teach_me", ...content });
     } catch (err) {
       await emit("side_content_error", { message: String(err) });
     }
   } else if (mode === "game") {
     try {
-      const quiz = await generateQuiz(requestUrl, prompt);
+      const quiz = await generateQuiz(env, prompt);
       await emit("side_content", { kind: "game", quiz });
     } catch (err) {
       await emit("side_content_error", { message: String(err) });
@@ -49,7 +50,7 @@ export async function runPipeline(
   if (needsSearch) {
     await emit("step_start", { type: "search" });
     try {
-      const results = await search(requestUrl, prompt);
+      const results = await search(env, prompt);
       context = results.map((r) => `${r.title}: ${r.snippet}`).join("\n");
       await emit("step_result", {
         type: "search",
@@ -66,7 +67,7 @@ export async function runPipeline(
 
   await emit("step_start", { type: "reasoning" });
   const answer = await askClaude(
-    requestUrl,
+    env,
     [
       {
         role: "user",
