@@ -1,10 +1,9 @@
-import { estimate } from "./estimate";
-import { search } from "./search";
+import { estimate, type Mode } from "./estimate";
 import { askClaude } from "./claude";
 import { teachMeSomething, generateQuiz } from "./sidecontent";
 import type { ProductEnv } from "./runtime";
 
-export type Mode = "minimal" | "teach_me" | "game" | "breadcrumbs" | "sonification";
+export type { Mode };
 
 function sseFormat(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -12,7 +11,10 @@ function sseFormat(event: string, data: unknown): string {
 
 // Runs the real task and writes a truthful event stream as it happens.
 // Every event here corresponds to something that actually occurred —
-// nothing is generated to "sound like progress."
+// nothing is generated to "sound like progress." For multi-step modes,
+// the "real steps" are two genuinely separate Claude calls (outline, then
+// full answer) rather than one call — this gives Breadcrumbs/Sonification
+// real events to narrate without depending on any external paid data.
 export async function runPipeline(
   env: ProductEnv,
   prompt: string,
@@ -23,8 +25,8 @@ export async function runPipeline(
   const emit = (event: string, data: unknown) =>
     writer.write(encoder.encode(sseFormat(event, data)));
 
-  const { needsSearch, bucket } = estimate(prompt);
-  await emit("estimate", { bucket, needsSearch });
+  const { bucket, multiStep } = estimate(mode);
+  await emit("estimate", { bucket });
 
   // Single-step side content, fired immediately, independent of the
   // real pipeline below — safe because it never claims to be a finding
@@ -45,40 +47,35 @@ export async function runPipeline(
     }
   }
 
-  let context = "";
+  let answer: string;
 
-  if (needsSearch) {
-    await emit("step_start", { type: "search" });
-    try {
-      const results = await search(env, prompt);
-      context = results.map((r) => `${r.title}: ${r.snippet}`).join("\n");
-      await emit("step_result", {
-        type: "search",
-        note:
-          results.length > 0
-            ? `Found ${results.length} results — top one: "${results[0].title}"`
-            : "No results found",
-        results,
-      });
-    } catch (err) {
-      await emit("step_error", { type: "search", message: String(err) });
-    }
+  if (multiStep) {
+    await emit("step_start", { type: "outline" });
+    const outline = await askClaude(env, [{ role: "user", content: prompt }], {
+      maxTokens: 200,
+      system:
+        "Before writing the full answer, briefly outline your approach " +
+        "in 2-3 short bullet points. No preamble.",
+    });
+    await emit("step_result", { type: "outline", note: "Drafted an approach", outline });
+
+    await emit("step_start", { type: "reasoning" });
+    answer = await askClaude(
+      env,
+      [
+        {
+          role: "user",
+          content: `Your outline:\n${outline}\n\nNow write the full answer to: ${prompt}`,
+        },
+      ],
+      { maxTokens: 1024 }
+    );
+    await emit("step_result", { type: "reasoning", note: "Synthesized answer" });
+  } else {
+    await emit("step_start", { type: "reasoning" });
+    answer = await askClaude(env, [{ role: "user", content: prompt }], { maxTokens: 1024 });
+    await emit("step_result", { type: "reasoning", note: "Synthesized answer" });
   }
-
-  await emit("step_start", { type: "reasoning" });
-  const answer = await askClaude(
-    env,
-    [
-      {
-        role: "user",
-        content: context
-          ? `Context from search:\n${context}\n\nQuestion: ${prompt}`
-          : prompt,
-      },
-    ],
-    { maxTokens: 1024 }
-  );
-  await emit("step_result", { type: "reasoning", note: "Synthesized answer" });
 
   await emit("done", { answer, bucket });
   await writer.close();

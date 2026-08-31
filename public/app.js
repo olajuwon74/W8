@@ -58,7 +58,7 @@ function playTone(freq, duration, type = "sine") {
 }
 
 const EVENT_TONES = {
-  search: [440, 0.6, "sine"],
+  outline: [440, 0.6, "sine"],
   reasoning: [330, 0.8, "triangle"],
   done: [660, 1.0, "sine"],
 };

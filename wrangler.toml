@@ -1,10 +1,12 @@
-# NOTE: this file mirrors what was here for the earlier plain-Worker
-# attempt and is likely superseded by whatever wrangler.toml Commonsmade's
-# `deploy_space` tool manages internally for the Durable Object app
-# (durable_objects binding + migrations for the `App` class, etc.). We
-# don't have visibility into that generated config. Kept here only as a
-# local reference for `tsc`/type-checking, not as the source of truth for
-# the actual deploy.
+# NOTE: this file mirrors the earlier plain-Worker attempt and is likely
+# superseded by whatever wrangler.toml Commonsmade's `deploy_space` tool
+# manages internally for the Durable Object app. Kept here only as a local
+# reference for `tsc`/type-checking, not as the source of truth for the
+# actual deploy.
+#
+# ANTHROPIC_API_KEY needs to be set as a secret on the deployed app
+# (outside this file) — confirm with platform support how custom secrets
+# are added.
 name = "commonsmade-ai-in-between"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"

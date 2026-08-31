@@ -1,4 +1,3 @@
-import { callX402 } from "./x402";
 import type { ProductEnv } from "./runtime";
 
 interface ClaudeMessage {
@@ -10,17 +9,24 @@ interface ClaudeResponse {
   content: { type: string; text: string }[];
 }
 
-// Routes the agent's own reasoning calls through the platform's x402
-// Anthropic proxy. This is plumbing, not a product feature — the pitch
-// frames x402 as an optional add-on, not the core mechanism.
+// Direct call to Anthropic's API — no x402, no Commonsmade proxy. Requires
+// ANTHROPIC_API_KEY to be set as a secret on the deployed app.
 export async function askClaude(
   env: ProductEnv,
   messages: ClaudeMessage[],
   opts: { maxTokens?: number; system?: string } = {}
 ): Promise<string> {
-  const result = await callX402<ClaudeResponse>(env, "anthropic", "v1/messages", {
+  if (!env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not set on this app");
+  }
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
     body: JSON.stringify({
       model: "claude-sonnet-5",
       max_tokens: opts.maxTokens ?? 1024,
@@ -29,13 +35,10 @@ export async function askClaude(
     }),
   });
 
-  if (!result.ok || !result.data) {
-    throw new Error(
-      result.paymentRequired
-        ? `x402 payment required for anthropic (balance ${result.paymentRequired.balance})`
-        : `Claude call failed with status ${result.status}`
-    );
+  if (!res.ok) {
+    throw new Error(`Claude call failed with status ${res.status}`);
   }
 
-  return result.data.content.map((c) => c.text).join("");
+  const data = (await res.json()) as ClaudeResponse;
+  return data.content.map((c) => c.text).join("");
 }
