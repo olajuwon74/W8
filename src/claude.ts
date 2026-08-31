@@ -1,3 +1,4 @@
+import { x402Fetch } from "./lib/commons-x402";
 import type { ProductEnv } from "./runtime";
 
 interface ClaudeMessage {
@@ -9,24 +10,18 @@ interface ClaudeResponse {
   content: { type: string; text: string }[];
 }
 
-// Direct call to Anthropic's API — no x402, no Commonsmade proxy. Requires
-// ANTHROPIC_API_KEY to be set as a secret on the deployed app.
+// Routes the agent's reasoning calls through Commonsmade's x402 Anthropic
+// proxy (free during the hackathon, funded from the app's Commons
+// balance) instead of a separately-billed Anthropic API key.
 export async function askClaude(
   env: ProductEnv,
   messages: ClaudeMessage[],
   opts: { maxTokens?: number; system?: string } = {}
 ): Promise<string> {
-  if (!env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not set on this app");
-  }
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const base = env.COMMONS_X402_API_URL ?? "";
+  const res = await x402Fetch(`${base}/anthropic/v1/messages`, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-5",
       max_tokens: opts.maxTokens ?? 1024,
@@ -34,6 +29,18 @@ export async function askClaude(
       messages,
     }),
   });
+
+  if (res.status === 402) {
+    const body = (await res.json()) as {
+      required_amount: string;
+      currency: string;
+      balance: string;
+      provider: string;
+    };
+    throw new Error(
+      `x402 payment required for anthropic (balance ${body.balance} ${body.currency})`
+    );
+  }
 
   if (!res.ok) {
     throw new Error(`Claude call failed with status ${res.status}`);

@@ -8,10 +8,6 @@ export interface ProductEnv {
   COMMONS_OIDC_CLIENT_SECRET?: string;
   COMMONS_X402_API_URL?: string;
   COMMONS_X402_API_KEY?: string;
-  // Custom secret — not part of Commonsmade's own env schema. Needs to be
-  // added as a secret on the app in the platform (if that's supported);
-  // confirm with platform support before deploying.
-  ANTHROPIC_API_KEY?: string;
 }
 
 export interface ProductContext {
