@@ -44,5 +44,5 @@ export interface ProductUser {
 
 export type ProductHandler = (
   request: Request,
-  context: ProductContext
+  context: ProductContext,
 ) => Promise<Response | null> | Response | null;

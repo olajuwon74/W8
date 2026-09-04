@@ -1,185 +1,297 @@
-const modeButton = document.getElementById("mode-button");
-const modePopover = document.getElementById("mode-popover");
-const composer = document.getElementById("composer");
-const promptInput = document.getElementById("prompt");
-const responseEl = document.getElementById("response");
+const $ = (id) => document.getElementById(id);
+const promptEl = $('prompt');
+const startBtn = $('start');
+const modesEl = $('modes');
+const waitEl = $('wait');
+const outcomeEl = $('outcome');
+const answerEl = $('answer');
+const statusEl = $('wait-status');
+const againBtn = $('again');
+const teachPanel = $('teachPanel');
+const teachBody = $('teachBody');
+const gamePanel = $('gamePanel');
+const gameBody = $('gameBody');
+const sonicPanel = $('sonicPanel');
+const sonicBody = $('sonicBody');
+const breadcrumbs = $('breadcrumbs');
+const toastEl = $('toast');
 
-const MODE_ICONS = {
-  minimal: "⚡",
-  teach_me: "🧠",
-  game: "🎮",
-  breadcrumbs: "🕵️",
-  sonification: "🔊",
-};
+const API = (path) => new URL(path, document.baseURI).pathname;
+const signinLink = $('signin');
+if (signinLink) {
+  const next = encodeURIComponent(location.pathname.replace(/^\/space\/[^/]+\/preview\/[^/]+\/?/, '') || '/');
+  signinLink.href = './auth/login?next=' + next;
+  signinLink.textContent = 'Sign in with Commons';
+  fetch('./api/me')
+    .then((r) => r.json())
+    .then((me) => {
+      if (me && me.sub) {
+        signinLink.textContent = me.name ? 'Signed in · ' + me.name : 'Signed in';
+        signinLink.href = './auth/logout';
+      }
+    })
+    .catch(() => { /* anonymous ok */ });
+}
 
-let currentMode = localStorage.getItem("inbetween-mode") || "minimal";
-modeButton.textContent = MODE_ICONS[currentMode];
+let active = new Set(['minimal']);
+let running = false;
 
-modeButton.addEventListener("click", () => {
-  const open = !modePopover.hidden;
-  modePopover.hidden = open;
-  modeButton.setAttribute("aria-expanded", String(!open));
+function setStartDisabled() {
+  startBtn.disabled = !promptEl.value.trim() || running;
+}
+
+promptEl.addEventListener('input', setStartDisabled);
+startBtn.addEventListener('click', startRun);
+againBtn.addEventListener('click', () => {
+  outcomeEl.hidden = true;
+  waitEl.hidden = true;
+  answerEl.textContent = '';
+  running = false;
+  promptEl.value = '';
+  setStartDisabled();
+  promptEl.focus();
 });
 
-modePopover.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-mode]");
-  if (!btn) return;
-  currentMode = btn.dataset.mode;
-  localStorage.setItem("inbetween-mode", currentMode);
-  modeButton.textContent = MODE_ICONS[currentMode];
-  modePopover.hidden = true;
+modesEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.mode');
+  if (!btn || running) return;
+  const mode = btn.dataset.mode;
+  if (mode === 'minimal') {
+    active = new Set(['minimal']);
+  } else {
+    active.delete('minimal');
+    if (active.has(mode)) {
+      active.delete(mode);
+    } else {
+      active.add(mode);
+    }
+  }
+  document.querySelectorAll('.mode').forEach((m) => {
+    const on = m.dataset.mode === 'minimal' ? active.has('minimal') : active.has(m.dataset.mode);
+    m.classList.toggle('active', on);
+  });
+  notify('Waiter mode: ' + (active.has('minimal') ? 'Minimal' : [...active].join(', ')));
 });
 
-document.addEventListener("click", (e) => {
-  if (!composer.contains(e.target)) modePopover.hidden = true;
-});
-
-// ---- Sonification: lightweight generative layer, no external libs ----
 let audioCtx = null;
-const activeOscillators = [];
 
 function ensureAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  return audioCtx;
-}
-
-function playTone(freq, duration, type = "sine") {
-  const ctx = ensureAudio();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.001, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start();
-  osc.stop(ctx.currentTime + duration);
-}
-
-const EVENT_TONES = {
-  outline: [440, 0.6, "sine"],
-  reasoning: [330, 0.8, "triangle"],
-  done: [660, 1.0, "sine"],
-};
-
-function sonify(eventType) {
-  const tone = EVENT_TONES[eventType];
-  if (tone) playTone(...tone);
-}
-
-function renderSonificationBars(active) {
-  responseEl.innerHTML = `<div class="sonification-viz">${Array.from(
-    { length: 12 },
-    () => `<div class="sonification-bar" style="height:${active ? 8 + Math.random() * 44 : 6}px"></div>`
-  ).join("")}</div><p class="placeholder">Listening to the agent's real work...</p>`;
-}
-
-// ---- Rendering per mode ----
-function renderPlaceholder() {
-  responseEl.innerHTML = `<p class="placeholder">Thinking...</p>`;
-}
-
-function appendBreadcrumb(note) {
-  const line = document.createElement("div");
-  line.className = "breadcrumb-line";
-  line.textContent = note;
-  responseEl.appendChild(line);
-}
-
-function renderSideCard(kind, data) {
-  const card = document.createElement("div");
-  card.className = "side-card";
-  if (kind === "teach_me") {
-    card.innerHTML = `<h3>Before your answer...</h3><p><strong>${data.concept}</strong> — ${data.explanation}</p>`;
-  } else if (kind === "game") {
-    card.innerHTML = `<h3>Quick one while you wait</h3>`;
-    data.quiz.forEach((q) => {
-      const block = document.createElement("div");
-      block.innerHTML = `<p>${q.question}</p>`;
-      q.options.forEach((opt, i) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "quiz-option";
-        btn.textContent = opt;
-        btn.addEventListener("click", () => {
-          btn.classList.add(i === q.correctIndex ? "correct" : "incorrect");
-        });
-        block.appendChild(btn);
-      });
-      card.appendChild(block);
-    });
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
   }
-  responseEl.prepend(card);
 }
 
-function renderAnswer(answer) {
-  const div = document.createElement("div");
-  div.className = "answer";
-  div.textContent = answer;
-  responseEl.appendChild(div);
+function playNote(note) {
+  ensureAudio();
+  if (!audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = 260 + note * 45;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.22);
+  } catch (e) { /* audio unavailable */ }
 }
 
-// ---- SSE parsing over fetch (POST bodies can't use EventSource) ----
-async function streamRespond(prompt, mode) {
-  const res = await fetch("/api/respond", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, mode }),
-  });
+function pitchChime() {
+  ensureAudio();
+  if (!audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 523.25;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.1, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.9);
+  } catch (e) { /* ignore */ }
+}
+
+function notify(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(notify._t);
+  notify._t = setTimeout(() => toastEl.classList.remove('show'), 2400);
+}
+
+function showWait(teach, game, bread, sonic) {
+  teachPanel.hidden = !teach;
+  gamePanel.hidden = !game;
+  sonicPanel.hidden = !sonic;
+  breadcrumbs.hidden = !bread;
+  teachBody.textContent = '';
+  gameBody.innerHTML = '';
+  sonicBody.textContent = '';
+  breadcrumbs.innerHTML = '';
+  statusEl.textContent = 'Preparing…';
+}
+
+async function startRun() {
+  const q = promptEl.value.trim();
+  if (!q || running) return;
+  running = true;
+  setStartDisabled();
+
+  const useTeach = active.has('teach');
+  const useGame = active.has('game');
+  const useBread = active.has('breadcrumbs');
+  const useSonic = active.has('sonification');
+
+  outcomeEl.hidden = true;
+  answerEl.textContent = '';
+  waitEl.hidden = false;
+  showWait(useTeach, useGame, useBread, useSonic);
+
+  let res;
+  try {
+    res = await fetch(API('./api/respond'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ q, modes: [...active] }),
+    });
+  } catch (err) {
+    finishError('Network error: ' + err.message);
+    return;
+  }
+
+  if (!res.ok || !res.body) {
+    let msg = 'Request failed (' + res.status + ')';
+    try {
+      const j = await res.json();
+      if (j.error) msg = j.error;
+    } catch (e) { /* ignore */ }
+    finishError(msg);
+    return;
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
+  let streaming = false;
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-
-    let boundary;
-    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-      const chunk = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      handleSseChunk(chunk, mode);
+    let idx;
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 2);
+      if (chunk.startsWith('data:')) {
+        let evt;
+        try { evt = JSON.parse(chunk.slice(5)); } catch (e) { continue; }
+        handleEvent(evt, () => { streaming = false; });
+      }
     }
   }
+
+  running = false;
+  setStartDisabled();
 }
 
-function handleSseChunk(chunk, mode) {
-  const lines = chunk.split("\n");
-  const eventLine = lines.find((l) => l.startsWith("event:"));
-  const dataLine = lines.find((l) => l.startsWith("data:"));
-  if (!eventLine || !dataLine) return;
+function finishError(msg) {
+  running = false;
+  waitEl.hidden = true;
+  setStartDisabled();
+  notify('Error: ' + msg);
+}
 
-  const eventName = eventLine.replace("event:", "").trim();
-  const data = JSON.parse(dataLine.replace("data:", "").trim());
-
-  if (eventName === "side_content") {
-    renderSideCard(data.kind, data);
-  } else if (eventName === "step_start" && mode === "sonification") {
-    sonify(data.type);
-    renderSonificationBars(true);
-  } else if (eventName === "step_result" && mode === "breadcrumbs") {
-    appendBreadcrumb(data.note);
-  } else if (eventName === "done") {
-    if (mode === "sonification") sonify("done");
-    if (mode !== "breadcrumbs") responseEl.innerHTML = "";
-    renderAnswer(data.answer);
-  } else if (eventName === "fatal_error" || eventName === "step_error") {
-    appendBreadcrumb(`⚠️ ${data.message}`);
+function handleEvent(evt) {
+  switch (evt.type) {
+    case 'step': {
+      const el = document.createElement('div');
+      el.className = 'crumb';
+      const lbl = document.createElement('strong');
+      lbl.textContent = '· ' + evt.label;
+      el.appendChild(lbl);
+      if (evt.detail) {
+        el.appendChild(document.createTextNode(' — ' + evt.detail));
+      }
+      breadcrumbs.appendChild(el);
+      statusEl.textContent = evt.label;
+      break;
+    }
+    case 'teach':
+      teachBody.textContent = evt.text;
+      statusEl.textContent = 'Teach Me loaded';
+      break;
+    case 'game':
+      renderGame(evt.questions || []);
+      statusEl.textContent = 'Trivia loaded';
+      break;
+    case 'sonic':
+      if (evt.action === 'start') {
+        sonicBody.textContent = '♪ generative tone — listen while you wait';
+        playNote(8);
+      } else if (evt.action === 'stop') {
+        sonicBody.textContent = '♪ answer ready';
+        playChime();
+      } else if (evt.note) {
+        playNote(evt.note);
+      }
+      break;
+    case 'token':
+      if (outcomeEl.hidden) outcomeEl.hidden = false;
+      answerEl.textContent += evt.text;
+      statusEl.textContent = 'Streaming answer…';
+      break;
+    case 'done':
+      statusEl.textContent = 'Answer complete';
+      waitEl.hidden = true;
+      break;
+    case 'error':
+      finishError(evt.error);
+      break;
   }
 }
 
-composer.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const prompt = promptInput.value.trim();
-  if (!prompt) return;
-  promptInput.value = "";
-  renderPlaceholder();
-  try {
-    await streamRespond(prompt, currentMode);
-  } catch (err) {
-    responseEl.innerHTML = `<p class="placeholder">Something went wrong: ${err}</p>`;
-  }
-});
+function renderGame(questions) {
+  gameBody.innerHTML = '';
+  if (!Array.isArray(questions) || !questions.length) return;
+  questions.forEach((qa, qi) => {
+    const opts = Array.isArray(qa.options) ? qa.options : [];
+    const box = document.createElement('div');
+    box.className = 'trivia';
+    const qh = document.createElement('div');
+    qh.className = 'trivia-q';
+    qh.textContent = (qi + 1) + '. ' + (qa.question || '');
+    box.appendChild(qh);
+
+    opts.forEach((opt, oi) => {
+      const lab = document.createElement('label');
+      lab.className = 'trivia-opt';
+      const inp = document.createElement('input');
+      inp.type = 'radio';
+      inp.name = 't' + qi;
+      inp.value = oi;
+      inp.addEventListener('change', () => {
+        lab.classList.remove('correct', 'wrong');
+        if (String(oi) === String(qa.answer)) {
+          lab.classList.add('correct');
+          notify('Correct! ✓');
+        } else {
+          lab.classList.add('wrong');
+          const right = opts[Number(qa.answer)];
+          notify('Not quite — ' + (right || 'answer unknown'));
+        }
+      });
+      lab.appendChild(inp);
+      lab.appendChild(document.createTextNode(' ' + opt));
+      box.appendChild(lab);
+    });
+    gameBody.appendChild(box);
+  });
+}
+
+function playChime() { playNote(9); playNote(12); }

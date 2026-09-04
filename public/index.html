@@ -1,47 +1,82 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The In-Between</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <main class="app">
-      <header class="topbar">
-        <span class="brand">The In-Between</span>
-        <a class="login-link" href="/auth/login">Sign in with Commons</a>
-      </header>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="W8 — an AI question-and-answer experience that replaces the empty loading spinner with honest, useful activity while a real response is generated.">
+<title>W8 — The In-Between</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="shell">
 
-      <section id="response" class="response" aria-live="polite"></section>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">W8</span>
+      <span class="brand-name">The In-Between</span>
+    </div>
+    <div class="topbar-meta">
+      <span class="save-hint">No account needed · just ask</span>
+      <a href="#" id="signin" class="signin-link">Sign in with Commons</a>
+    </div>
+  </header>
 
-      <form id="composer" class="composer">
-        <button
-          type="button"
-          id="mode-button"
-          class="mode-button"
-          aria-haspopup="true"
-          aria-expanded="false"
-          title="How do you want to wait?"
-        >
-          ⚡
-        </button>
-        <div id="mode-popover" class="mode-popover" hidden>
-          <button type="button" data-mode="minimal">⚡ Minimal</button>
-          <button type="button" data-mode="teach_me">🧠 Teach Me Something</button>
-          <button type="button" data-mode="game">🎮 Game</button>
-          <button type="button" data-mode="breadcrumbs">🕵️ Breadcrumbs</button>
-          <button type="button" data-mode="sonification">🔊 Sonification</button>
+  <main class="stage">
+
+    <section class="hero" id="ask">
+      <p class="kicker">W8 · THE IN-BETWEEN</p>
+      <h1>Make the wait honest.</h1>
+      <p class="sub">Ask anything. While your answer is formed, choose a meaningful way to spend the in-between.</p>
+
+      <div class="composer" id="composer">
+        <textarea id="prompt" rows="3" placeholder="Ask me anything…"></textarea>
+        <div class="composer-actions">
+          <button id="start" class="btn primary" disabled>Start response</button>
         </div>
-        <input
-          id="prompt"
-          type="text"
-          placeholder="Ask anything..."
-          autocomplete="off"
-        />
-        <button type="submit" class="send-button">Send</button>
-      </form>
-    </main>
-    <script src="/app.js"></script>
-  </body>
+      </div>
+
+      <div class="modes" id="modes" role="group" aria-label="Wait modes">
+        <button class="mode active" data-mode="minimal" data-title="Minimal"><span class="m-ic">◯</span><span>Minimal</span></button>
+        <button class="mode" data-mode="teach" data-title="Teach Me"><span class="m-ic">✺</span><span>Teach Me</span></button>
+        <button class="mode" data-mode="game" data-title="Game"><span class="m-ic">▦</span><span>Game</span></button>
+        <button class="mode" data-mode="breadcrumbs" data-title="Breadcrumbs"><span class="m-ic">⌘</span><span>Breadcrumbs</span></button>
+        <button class="mode" data-mode="sonification" data-title="Sonification"><span class="m-ic">♫</span><span>Sonification</span></button>
+      </div>
+    </section>
+
+    <section class="wait" id="wait" hidden>
+      <div class="wait-status" id="wait-status">Working…</div>
+      <div class="side">
+        <div class="panel" id="teachPanel" hidden>
+          <div class="panel-title">Teach Me Something</div>
+          <div class="panel-body" id="teachBody"></div>
+        </div>
+        <div class="panel" id="gamePanel" hidden>
+          <div class="panel-title">Trivia</div>
+          <div class="panel-body" id="gameBody"></div>
+        </div>
+        <div class="panel" id="sonicPanel" hidden>
+          <div class="panel-title">Sonification</div>
+          <div class="panel-body" id="sonicBody"></div>
+        </div>
+      </div>
+      <div class="breadcrumbs" id="breadcrumbs" hidden></div>
+    </section>
+
+    <section class="outcome" id="outcome" hidden>
+      <div class="answer" id="answer"></div>
+      <button class="btn ghost" id="again">Ask another</button>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <span>Honest waits · real processing · streamed answers</span>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+</div>
+<script type="module" src="./app.js"></script>
+</body>
 </html>
